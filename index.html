@@ -1,0 +1,380 @@
+<html>
+
+<head>
+	<title>triangles</title>
+	<style>
+		body {
+			text-align: center;
+		}
+
+		#canvas {
+			border: 0px solid black;
+			width: 1200px;
+			margin: 0px auto auto auto;
+		}
+
+		polygon {
+			fill: #000;
+			stroke: none;
+
+		}
+	</style>
+	<script src="colors.js"></script>
+	<script type="text/javascript">
+
+		window.hue_shift = 45
+
+		window.sat = 0.85;
+		window.lum = 1;
+		window.hue_loop = [350, 217, 135, 27]
+		window.sampled_colors = {
+			crimson: {
+				hue: [350, 352, 16, 358, 348, 348,
+					346, 352, 16],
+				saturation: [1, 1, 1, 1, 1, 1,
+					1, 1, 1],
+				lightness: [0.62, 0.66, 0.88, 0.81, 0.6, 0.6,
+					0.62, 0.66, 0.67],
+				alpha: [1.0, 1, 1, 1, 1, 1, 1, 1],
+			}
+		}
+		window.start_hue = window.hue_loop[0]
+		window.hue_mode == "loop"
+
+		window.row = 0
+		window.triangles = ["top", "bottom", "right", "left", "otop", "obottom"]
+		window.offset = [-0, -0]
+		window.drawing = []
+		window.center = [50, 50]
+		window.start_columns = 8;
+		window.start_rows = 9;
+		window.length = 60
+		window.drawn_triangles = []
+
+		//#########################################
+		//
+		//     _________
+		//     \ / | \ /              
+		//     /_\ | /_\
+		//
+		//  The tessel;a;on is made up of these 6 - triangled shapes we call "hexafold - , all triangles 
+		//  within a hexafold have a characteristic hue, and sat and luminance vary for all 6 triangles.
+		//  In the diagram above, the indivudal triangles are named (indexed) as follows:
+		///
+		//       TOP						      OTOP (opposing top)
+		//                  RIGHT     LEFT
+		//       BOTTOM						  OBOTTOM (opposing bottom)
+		//
+		// they are named as if a single square were cut along the top diagonals - The TOP is triangle containing the TOP edge, pointing down, Right woukd be the 
+		// triangle containg  the RIGHT edge, poining Left 
+
+		var center = [0, 0]
+		window.clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+		window.next_loop = function () {
+			window.jj ||= 0
+			var r = window.hue_loop[window.jj]
+			window.jj += 1
+			if (window.jj >= window.hue_loop.length) {
+				window.jj = 0
+			}
+			return r
+		}
+		window.url_query = function (name) {
+			var kvs = {}
+			var u = new URL(window.location)
+			var params = u.search.split("?")[1]?.split("&")?.map(x => x.split("="))?.map(x => kvs[x[0]] = parseFloat(x[1]))
+			return kvs[name]
+		}
+
+		/**
+	 * @param {number} hue - Hue as degrees 0..360
+	 * @param {number} sat - Saturation as percentage 0..100
+	 * @param {number} light - Lightness as percentage 0..100
+*/
+		function hslToRgb(hue, sat, light) {
+			hue = hue % 360;
+
+			if (hue < 0)
+				hue += 360;
+
+			sat /= 100;
+			light /= 100;
+
+			function f(n) {
+				let k = (n + hue / 30) % 12;
+				let a = sat * Math.min(light, 1 - light);
+				return light - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+			}
+
+			return [f(0), f(8), f(4)];
+		}
+
+		function col(drawn) {
+			//var triags = ["top", "bottom", "right", "left", "otop", "obottom"]
+			var cls = []
+			if (drawn == "top")
+				cls = hslToRgb(window.hue, 75 * window.sat, 75 * window.lum)
+			if (drawn == "bottom")
+				cls = hslToRgb(window.hue, 75 * window.sat, 63 * window.lum)
+			if (drawn == "right")
+				cls = hslToRgb(window.hue, 75 * window.sat, 84 * window.lum)
+			if (drawn == "left")
+				cls = hslToRgb(window.hue, 85 * window.sat, 78 * window.lum)
+			if (drawn == "otop")
+				cls = hslToRgb(window.hue, 85 * window.sat, 66 * window.lum)
+			if (drawn == "obottom")
+				cls = hslToRgb(window.hue, 60 * window.sat, 54 * window.lum)
+			return "rgb(" + cls.map(x => window.clamp((!x ? 0 : x) * 255.0, 0, 255.0)).join(",") + ")"
+		}
+
+		window.triangle = function (points = []) {
+			var svg = document.querySelector("svg");
+			var polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+			var drawn = window.triangles[window.iter]
+			polygon.dataset.drawn = drawn
+			polygon.dataset.row = window.row
+			polygon.dataset.shape = window.shape
+			polygon.dataset.column = Math.floor(window.shape / 6)
+			polygon.dataset.hue = window.hue % 360
+			polygon.style.fill = col(drawn)
+			polygon.classList.add(polygon.dataset.drawn)
+			polygon.classList.add("column_" + polygon.dataset.column)
+
+			//console.log("Color", polygon.style.fill)
+			window.iter += 1
+			window.shape += 1
+			if (window.iter > window.triangles.length - 1)
+				window.iter = 0
+			svg.appendChild(polygon);
+			for (value of points) {
+				var point = svg.createSVGPoint();
+				point.x = value[0];
+				point.y = value[1];
+				polygon.points.appendItem(point);
+			}
+
+			window.drawn_triangles[window.row] = window.drawn_triangles.push(polygon)
+			return polygon
+		}
+
+		window.rectMask = function () {
+			var svg = document.querySelector("svg");
+			var polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+			polygon.dataset.row = window.row
+			polygon.dataset.shape = window.shape
+			polygon.dataset.column = Math.floor(window.shape / 6)
+			polygon.dataset.hue = window.hue % 360
+			polygon.style.fill = "rgb(255,255,255)"
+			svg.appendChild(polygon);
+			points = [
+				[0, 0],
+				[window.length, 0],
+				[window.length, 4200],
+				[0, 4200],
+			]
+			for (value of points) {
+				var point = svg.createSVGPoint();
+				point.x = value[0];
+				point.y = value[1];
+				polygon.points.appendItem(point);
+			}
+
+		}
+		window.rectMask2 = function () {
+			var svg = document.querySelector("svg");
+			var polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+			polygon.dataset.row = window.row
+			polygon.dataset.shape = window.shape
+			polygon.dataset.column = Math.floor(window.shape / 6)
+			polygon.dataset.hue = window.hue % 360
+			polygon.style.fill = "rgb(255,255,255)"
+			svg.appendChild(polygon);
+			var left_bound = 1200 - window.length
+			points = [
+				[left_bound, 0],
+				[4000, 0],
+				[4000, 4200],
+				[left_bound, 4200],
+			]
+			for (value of points) {
+				var point = svg.createSVGPoint();
+				point.x = value[0];
+				point.y = value[1];
+				polygon.points.appendItem(point);
+			}
+
+		}
+
+		window.drawHexa = function (col, r) {
+
+			var x = col * (window.length * 3)
+			var y = col * (window.length) +
+				(r * window.length * 2)
+
+			window.offset = [x, y]
+
+			var points0 = [
+				[window.offset[0] + center[0], window.offset[1] + center[1]],
+				[window.offset[0] + center[0] - length, window.offset[1] + center[0] - length],
+				[window.offset[0] + center[0] + length, window.offset[1] + center[1] - length]
+			]
+
+			var points1 = [
+				[window.offset[0] + center[0], window.offset[1] + center[1]],
+				[window.offset[0] + center[0] + length, window.offset[1] + center[1] + length],
+				[window.offset[0] + center[0] - length, window.offset[1] + center[1] + length]
+			]
+
+			var points2 = [
+				[window.offset[0] + center[0], window.offset[1] + center[1]],
+				[window.offset[0] + center[0] + length, window.offset[1] + length + center[1]],
+				[window.offset[0] + center[0] + length, window.offset[1] - length + center[1]]
+			]
+
+			var points3 = [
+				[window.offset[0] + center[0] + (length * 2), window.offset[1] + center[1]],
+				[window.offset[0] + center[0] + length, window.offset[1] + center[1] - length],
+				[window.offset[0] + center[0] + length, window.offset[1] + center[1] + length]
+			]
+
+			var points4 = [
+				[window.offset[0] + center[0] + (length * 2), window.offset[1] + center[1]],
+				[window.offset[0] + center[0] + (3 * length), window.offset[1] + center[0] - length],
+				[window.offset[0] + center[0] + length, window.offset[1] + center[1] - length]
+			]
+
+
+			var points5 = [
+				[window.offset[0] + center[0] + (length * 2), window.offset[1] + center[1]],
+				[window.offset[0] + center[0] + length, window.offset[1] + center[1] + length],
+				[window.offset[0] + center[0] + (3 * length), window.offset[1] + center[1] + length]
+			]
+
+			return [
+				window.triangle(points0),
+				window.triangle(points1),
+				window.triangle(points2),
+				window.triangle(points3),
+				window.triangle(points4),
+				window.triangle(points5)
+			]
+
+
+		}
+
+		window.drawRow = function (hue = null) {
+			window.shape = 0
+			window.row += 1
+			if (window.hue_mode == "loop")
+				window.hue = window.next_loop()
+			else if (hue)
+				window.hue = hue
+			else
+				window.hue -= window.hue_shift
+
+			Array(window.columns).fill(0).map((x, i) =>
+				window.drawHexa(i, window.row)
+			)
+
+			//window.offset = [0, window.row * 40]
+			return
+		}
+
+		window.onResize = function () {
+			var svg = document.querySelector("svg");
+			var w = window.innerWidth
+			var h = window.innerHeight
+			//	var l = parseInt(w / (window.columns * 3.5))
+			//window.length = l
+			//svg.setAttribute("width", w)
+			svg.setAttribute("height", h)
+			svg.innerHTML = ""
+
+			console.log("resized", svg.width, svg.height)
+			setTimeout(window.redraw(), 1000)
+
+		}
+
+		window.getParams = function () {
+
+			window.hue = (window.start_hue)
+			window.hue_shift ||= window.url_query("hue_shift")
+			window.columns ||= (window.url_query("columns") || window.start_columns)
+			window.rows ||= (window.url_query("rows") || window.start_rows)
+
+		}
+
+		window.drawSingleYellowOrphan = function (placement = [4, 7], hue = 65) {
+			window.hue = hue
+			window.drawHexa(...placement)
+		}
+
+		window.redraw = function () {
+			var svg = document.querySelector("svg");
+			svg.innerHTML = ""
+			window.iter = 0
+			window.shape = 0
+			window.row = 0
+			window.getParams()
+			Array(window.rows).fill(0)
+				.map((x, i) => {
+					window.drawn_triangles[window.row] = []
+					window.drawRow(window.next_loop())
+				}
+				)
+			window.drawSingleYellowOrphan()
+			window.shape = 0
+			window.iter = 0
+			window.rectMask()
+			window.rectMask2()
+		}
+		window.colorChange = function (e) {
+			if (e.key == "ArrowRight")
+				window.hue_shift += 1
+			if (e.key == "ArrowLeft")
+				window.hue_shift -= 1
+			if (e.key == "ArrowUp")
+				window.start_hue += 3
+			if (e.key == "ArrowDown") {
+				e.preventDefault();
+				window.start_hue -= 3;
+			}
+
+			if (e.key == "s")
+				window.sat += 0.05
+			if (e.key == "d")
+				window.sat -= 0.05
+			if (e.key == "x")
+				window.lum += 0.05
+			if (e.key == "z")
+				window.lum -= 0.05
+			if (e.key == "o")
+				window.columns -= 1
+			if (e.key == "p")
+				window.columns += 1
+			if (e.key == "k")
+				window.rows -= 1
+			if (e.key == "l")
+				window.rows += 1
+			window.redraw()
+		}
+		window.addEventListener("keydown", function (e) { window.colorChange(e) })
+
+		//window.addEventListener("resize", window.onResize)
+
+		window.getParams()
+	</script>
+</head>
+
+<body>
+	<svg id="canvas" width="4000" height="4000" top="10px" style=""></svg>
+
+
+
+
+</body>
+<script type="text/javascript">
+	window.redraw()
+</script>
+
+</html>
